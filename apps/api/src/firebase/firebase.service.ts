@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { initializeApp, cert, getApp, type App } from "firebase-admin/app";
+import { initializeApp, cert, type App } from "firebase-admin/app";
 import { getAuth, type Auth, type DecodedIdToken } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
@@ -30,23 +30,25 @@ export class FirebaseService implements OnModuleInit {
     const clientEmail = this.config.get<string>("FIREBASE_CLIENT_EMAIL");
     const privateKeyRaw = this.config.get<string>("FIREBASE_PRIVATE_KEY");
 
-    if (!projectId || !clientEmail || !privateKeyRaw) {
-      this.logger.warn(
-        "FIREBASE_PROJECT_ID / CLIENT_EMAIL / PRIVATE_KEY missing - Firebase features will fail",
+    const missing = [
+      !projectId && "FIREBASE_PROJECT_ID",
+      !clientEmail && "FIREBASE_CLIENT_EMAIL",
+      !privateKeyRaw && "FIREBASE_PRIVATE_KEY",
+    ].filter(Boolean) as string[];
+
+    if (missing.length > 0) {
+      throw new Error(
+        `Firebase env vars missing: ${missing.join(", ")}. ` +
+          `Set them in your Render service's Environment tab.`,
       );
     }
 
     // Render stores the key with literal "\n" escapes; convert to real newlines.
-    const privateKey = privateKeyRaw?.replace(/\\n/g, "\n");
+    const privateKey = privateKeyRaw!.replace(/\\n/g, "\n");
 
-    try {
-      this._app = initializeApp({
-        credential: cert({ projectId, clientEmail, privateKey }),
-      });
-    } catch (err) {
-      // initializeApp throws if called twice (e.g. in tests); reuse the app.
-      this._app = getApp();
-    }
+    this._app = initializeApp({
+      credential: cert({ projectId, clientEmail, privateKey }),
+    });
     this.logger.log(`Firebase Admin initialized for project ${projectId}`);
     return this._app;
   }
