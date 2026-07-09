@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { SupabaseModule } from './supabase/supabase.module';
+import { SupabaseController } from './supabase.controller';
 
 @Module({
   imports: [
@@ -11,7 +12,7 @@ import { SupabaseModule } from './supabase/supabase.module';
     }),
     SupabaseModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, SupabaseController],
   providers: [AppService],
 })
 export class AppModule {}
