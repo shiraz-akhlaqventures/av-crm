@@ -13,6 +13,7 @@ out
 .env.*
 !.env.example
 crush.json
+.agents/
 
 # Logs
 logs
