@@ -126,9 +126,12 @@ Both apps use ESLint 9 flat config (`eslint.config.mjs`).
 `.prettierrc` in `apps/api`: `{ singleQuote: true, trailingComma: "all" }`. The web app has no Prettier config.
 
 ### Environment variables
-- `apps/api/.env.example`: `PORT`, `NODE_ENV`, `CORS_ORIGIN` (default `http://localhost:3000`), `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (newlines escaped as `\n`), `JWT_SECRET`.
-- `apps/web/.env.example`: `NEXT_PUBLIC_API_URL` (default `http://localhost:3001`), then `NEXT_PUBLIC_FIREBASE_*` (apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId, measurementId).
-- Both `.env` files are committed (gitignored only at root level, not per-app). The values look like placeholders — confirm with the user before relying on them.
+See [`ENVIRONMENTS.md`](./ENVIRONMENTS.md) for the full strategy. Short version:
+- Production: Vercel / Render dashboards (no committed env files).
+- Staging: Vercel Preview env scoped to `staging` branch; Render staging service.
+- Local: `apps/*/.env.local` (gitignored).
+- Examples: `apps/*/.env.example` (committed).
+- **Do not create `.env.production`, `.env.development`, or `.env.staging`** — Next.js bakes `.env.production` into the JS bundle at build time (secret leak risk) and `.env.staging` is not a recognized filename. Staging is handled by Vercel's Preview environment with branch filtering.
 - **CORS pairing**: web is on `:3000`, api on `:3001`. Both `CORS_ORIGIN` (api) and `NEXT_PUBLIC_API_URL` (web) must agree for cross-origin fetches.
 
 ### ts-jest scope (`apps/api`)
