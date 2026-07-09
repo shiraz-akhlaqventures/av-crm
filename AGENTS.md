@@ -157,7 +157,7 @@ Custom skills live in `.crush/skills/` (firebase, nestjs-expert, nextjs, r3f-bes
 
 ## Deployment
 
-- **Frontend → Vercel**: [`vercel.json`](./vercel.json) sets `rootDirectory: "apps/web"`, `framework: "nextjs"`, `buildCommand: "pnpm build --filter web"`, `installCommand: "pnpm install"`.
+- **Frontend → Vercel**: [`vercel.json`](./vercel.json) sets only build/install overrides (`buildCommand: "pnpm build --filter web"`, `installCommand: "pnpm install"`). **Root Directory must be set in the Vercel dashboard** (Project → Settings → General → Root Directory → `apps/web`) — `rootDirectory` is not a valid `vercel.json` property in monorepo mode.
 - **Backend → Render** (per PRD; not yet wired up — no `render.yaml` exists).
 - **Database / Auth / Storage → Firebase** (Firestore, Auth, Storage, FCM). Service account credentials live in the api's `.env`.
 
