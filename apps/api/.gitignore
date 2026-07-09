@@ -1,0 +1,19 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+.turbo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs
+*.log
+
+# OS
+.DS_Store
