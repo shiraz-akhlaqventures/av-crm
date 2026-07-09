@@ -19,7 +19,7 @@ av-crm/
 ├── crush.json        Crush CLI config (LLM providers)
 ├── turbo.json        Turbo task pipeline
 ├── pnpm-workspace.yaml
-└── vercel.json       Vercel deployment config (rootDirectory: apps/web)
+└── vercel.json       Vercel build/install overrides (root dir set in Vercel dashboard)
 ```
 
 - **Workspace**: pnpm with `apps/*` + `packages/*` (see `pnpm-workspace.yaml`).
@@ -157,7 +157,7 @@ Custom skills live in `.crush/skills/` (firebase, nestjs-expert, nextjs, r3f-bes
 
 ## Deployment
 
-- **Frontend → Vercel**: [`vercel.json`](./vercel.json) sets only build/install overrides (`buildCommand: "pnpm build --filter web"`, `installCommand: "pnpm install"`). **Root Directory must be set in the Vercel dashboard** (Project → Settings → General → Root Directory → `apps/web`) — `rootDirectory` is not a valid `vercel.json` property in monorepo mode.
+- **Frontend → Vercel**: [`vercel.json`](./vercel.json) sets only build/install overrides (`buildCommand: "pnpm --filter @av-crm/shared-types build && pnpm build"`, `installCommand: "pnpm install"`). Root Directory is set in Vercel → Project → Settings → General → Root Directory → `apps/web` (not a valid `vercel.json` property in monorepo mode). The `&&` ensures `packages/shared-types/dist/` exists before `next build` runs, since the package's `main` points to `./dist/index.js`.
 - **Backend → Render** (per PRD; not yet wired up — no `render.yaml` exists).
 - **Database / Auth / Storage → Firebase** (Firestore, Auth, Storage, FCM). Service account credentials live in the api's `.env`.
 

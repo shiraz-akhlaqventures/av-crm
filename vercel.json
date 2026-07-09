@@ -1,4 +1,4 @@
 {
-  "buildCommand": "pnpm build --filter web",
+  "buildCommand": "pnpm --filter @av-crm/shared-types build && pnpm build",
   "installCommand": "pnpm install"
 }
