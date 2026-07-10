@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api, clearAccessToken, getAccessToken } from "@/lib/api/client";
 import { signOut } from "@/lib/firebase/auth";
 import { Scene } from "@/components/scene/Scene";
+import { useIndianTime } from "@/components/scene/useIndianTime";
 import type {
   Company,
   Subsidiary,
@@ -176,6 +177,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs text-zinc-300">
+          <TimeOfDayBadge />
           <span>{signedInAs}</span>
           <button
             onClick={onSignOut}
@@ -260,5 +262,34 @@ export default function Dashboard() {
         Drag to rotate · scroll to zoom · click a department or employee
       </div>
     </main>
+  );
+}
+
+/**
+ * Tiny badge in the header showing current Asia/Kolkata time and
+ * the time-of-day bucket the scene is rendering.
+ */
+function TimeOfDayBadge() {
+  const t = useIndianTime(60_000);
+  const hh = String(t.hour).padStart(2, "0");
+  const icon =
+    t.tod === "night"
+      ? "🌙"
+      : t.tod === "evening"
+        ? "🌆"
+        : t.tod === "dawn"
+          ? "🌅"
+          : t.tod === "morning"
+            ? "☀️"
+            : "🌞";
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-900/80 px-2 py-1"
+      title={`Asia/Kolkata — ${t.label}`}
+    >
+      <span>{icon}</span>
+      <span className="font-mono text-zinc-100">{hh}:00 IST</span>
+      <span className="text-zinc-400">{t.label}</span>
+    </span>
   );
 }
