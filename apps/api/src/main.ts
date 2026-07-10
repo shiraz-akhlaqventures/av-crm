@@ -5,6 +5,18 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const allowedOrigins = (process.env.CORS_ORIGIN ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  app.enableCors({
+    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({
@@ -16,6 +28,9 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  Logger.log(`API listening on http://localhost:${port}/api`, 'Bootstrap');
+  Logger.log(
+    `API listening on http://localhost:${port}/api (CORS: ${allowedOrigins.join(', ') || 'all'})`,
+    'Bootstrap',
+  );
 }
 bootstrap();
