@@ -1,24 +1,24 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { signIn, signUp, getIdToken } from "@/lib/firebase/auth";
-import { api } from "@/lib/api/client";
+import { useRouter } from "next/navigation";
+import { signIn, signUp } from "@/lib/firebase/auth";
+import { api, setAccessToken } from "@/lib/api/client";
 
 type Mode = "signin" | "signup";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<Record<string, unknown> | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    setResult(null);
     try {
       const cred =
         mode === "signin"
@@ -31,14 +31,12 @@ export default function LoginPage() {
         { method: "POST", body: JSON.stringify({ idToken }) },
       );
 
-      // For the smoke test we just display the JWT length.
-      setResult({
-        mode,
-        uid: cred.user.uid,
-        email: cred.user.email,
-        accessTokenLength: data.accessToken.length,
-        apiTokenReceived: Boolean(getIdToken),
-      });
+      // Store the JWT so subsequent API calls pass it in the
+      // Authorization header. sessionStorage clears on tab close.
+      setAccessToken(data.accessToken);
+
+      // Redirect to the dashboard.
+      router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -109,12 +107,6 @@ export default function LoginPage() {
             ? "Need an account? Sign up"
             : "Already have one? Sign in"}
         </button>
-
-        {result && (
-          <pre className="mt-6 text-xs bg-zinc-100 dark:bg-zinc-900 p-3 rounded-md overflow-auto">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        )}
       </div>
     </main>
   );
