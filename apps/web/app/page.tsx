@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { api, clearAccessToken, getAccessToken } from "@/lib/api/client";
 import { signOut } from "@/lib/firebase/auth";
 import type {
@@ -222,9 +221,7 @@ export default function Dashboard() {
       </div>
 
       <footer className="mt-12 text-center text-xs text-zinc-400">
-        <Link href="/login" className="hover:underline">
-          Login
-        </Link>
+        Akhlaq Ventures 3D Company Dashboard
       </footer>
     </main>
   );
