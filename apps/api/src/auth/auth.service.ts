@@ -49,7 +49,7 @@ export class AuthService {
         uid,
         email,
         displayName: decoded.name ?? email.split("@")[0] ?? "User",
-        photoURL: decoded.picture,
+        ...(decoded.picture ? { photoURL: decoded.picture } : {}),
         role: "employee",
         permissions: [],
         primaryEntityId: "",
