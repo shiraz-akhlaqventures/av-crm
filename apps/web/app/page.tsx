@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, clearAccessToken, getAccessToken } from "@/lib/api/client";
 import { signOut } from "@/lib/firebase/auth";
+import { Scene } from "@/components/scene/Scene";
 import type {
   Company,
   Subsidiary,
@@ -11,33 +12,38 @@ import type {
   Employee,
 } from "@av-crm/shared-types";
 
-type SubsidiaryWithDepartments = Subsidiary & { departments: Department[] };
-
 export default function Dashboard() {
   const router = useRouter();
   const [company, setCompany] = useState<Company | null>(null);
-  const [subsidiaries, setSubsidiaries] = useState<SubsidiaryWithDepartments[]>(
-    [],
+  const [subsidiaries, setSubsidiaries] = useState<Subsidiary[]>([]);
+  const [departmentsBySubsidiary, setDepartmentsBySubsidiary] = useState<
+    Record<string, Department[]>
+  >({});
+  const [employeesByDepartment, setEmployeesByDepartment] = useState<
+    Record<string, Employee[]>
+  >({});
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<
+    string | null
+  >(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
+    null,
   );
-  const [selectedDept, setSelectedDept] = useState<Department | null>(null);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [signedInAs, setSignedInAs] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [signedInAs, setSignedInAs] = useState<string | null>(null);
 
-  // Redirect to /login if we don't have a JWT yet.
+  // Redirect to /login if no JWT.
   useEffect(() => {
     if (!getAccessToken()) {
       router.replace("/login");
-    } else {
-      // Pull our own user info from /api/auth/me for the header.
-      api<{ email?: string }>("/api/auth/me")
-        .then((u) => setSignedInAs(u.email ?? null))
-        .catch(() => setSignedInAs(null));
+      return;
     }
+    api<{ email?: string }>("/api/auth/me")
+      .then((u) => setSignedInAs(u.email ?? null))
+      .catch(() => setSignedInAs(null));
   }, [router]);
 
-  // Load the company + subsidiaries + their departments.
+  // Load the hierarchy.
   useEffect(() => {
     if (!getAccessToken()) return;
     let cancelled = false;
@@ -58,18 +64,29 @@ export default function Dashboard() {
           `/api/subsidiaries?companyId=${ak.id}`,
         );
         if (cancelled) return;
+        setSubsidiaries(subs);
 
-        // Load departments per subsidiary in parallel.
-        const enriched = await Promise.all(
-          subs.map(async (s) => ({
-            ...s,
-            departments: await api<Department[]>(
-              `/api/departments?subsidiaryId=${s.id}`,
-            ),
-          })),
+        const deptMap: Record<string, Department[]> = {};
+        const empMap: Record<string, Employee[]> = {};
+        await Promise.all(
+          subs.map(async (sub) => {
+            const depts = await api<Department[]>(
+              `/api/departments?subsidiaryId=${sub.id}`,
+            );
+            deptMap[sub.id] = depts;
+            await Promise.all(
+              depts.map(async (d) => {
+                const emps = await api<Employee[]>(
+                  `/api/employees?departmentId=${d.id}`,
+                );
+                empMap[d.id] = emps;
+              }),
+            );
+          }),
         );
         if (cancelled) return;
-        setSubsidiaries(enriched);
+        setDepartmentsBySubsidiary(deptMap);
+        setEmployeesByDepartment(empMap);
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -82,18 +99,6 @@ export default function Dashboard() {
     };
   }, []);
 
-  async function onSelectDepartment(dept: Department) {
-    setSelectedDept(dept);
-    try {
-      const list = await api<Employee[]>(
-        `/api/employees?departmentId=${dept.id}`,
-      );
-      setEmployees(list);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
   async function onSignOut() {
     try {
       await signOut();
@@ -102,18 +107,32 @@ export default function Dashboard() {
     router.replace("/login");
   }
 
+  const selectedDepartment = useMemo(() => {
+    if (!selectedDepartmentId) return null;
+    for (const list of Object.values(departmentsBySubsidiary)) {
+      const found = list.find((d) => d.id === selectedDepartmentId);
+      if (found) return found;
+    }
+    return null;
+  }, [selectedDepartmentId, departmentsBySubsidiary]);
+
+  const selectedEmployees = useMemo(() => {
+    if (!selectedDepartmentId) return [];
+    return employeesByDepartment[selectedDepartmentId] ?? [];
+  }, [selectedDepartmentId, employeesByDepartment]);
+
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <p className="text-zinc-500">Loading…</p>
+      <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-zinc-300">
+        <p>Loading…</p>
       </main>
     );
   }
 
   if (error) {
     return (
-      <main className="flex min-h-screen items-center justify-center p-6">
-        <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950 p-4 text-sm text-red-700 dark:text-red-300 max-w-lg">
+      <main className="flex min-h-screen items-center justify-center p-6 bg-zinc-950">
+        <div className="rounded-md border border-red-300 bg-red-950 p-4 text-sm text-red-200 max-w-lg">
           <p className="font-semibold mb-1">Error</p>
           <p>{error}</p>
         </div>
@@ -121,108 +140,125 @@ export default function Dashboard() {
     );
   }
 
-  if (!company) return null;
-
   return (
-    <main className="min-h-screen p-6 max-w-6xl mx-auto">
-      <header className="flex items-center justify-between mb-8">
+    <main className="relative h-screen w-screen overflow-hidden bg-zinc-950">
+      {/* 3D Canvas (full bleed) */}
+      <div className="absolute inset-0">
+        <Scene
+          subsidiaries={subsidiaries}
+          departmentsBySubsidiary={departmentsBySubsidiary}
+          employeesByDepartment={employeesByDepartment}
+          selectedDepartmentId={selectedDepartmentId}
+          onSelectDepartment={(d) => setSelectedDepartmentId(d.id)}
+          onSelectEmployee={(e) => setSelectedEmployee(e)}
+          selectedEmployeeId={selectedEmployee?.id}
+        />
+      </div>
+
+      {/* Top header */}
+      <header className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-6 py-4 bg-gradient-to-b from-black/70 to-transparent">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {company.name}
+          <h1 className="text-xl font-semibold text-white">
+            {company?.name ?? "Akhlaq Ventures"}
           </h1>
-          <p className="text-sm text-zinc-500">{company.description}</p>
+          <p className="text-xs text-zinc-400">
+            {subsidiaries.length} subsidiaries ·{" "}
+            {Object.values(departmentsBySubsidiary).reduce(
+              (n, list) => n + list.length,
+              0,
+            )}{" "}
+            departments ·{" "}
+            {Object.values(employeesByDepartment).reduce(
+              (n, list) => n + list.length,
+              0,
+            )}{" "}
+            employees
+          </p>
         </div>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-zinc-500">
-            {signedInAs ? `Signed in as ${signedInAs}` : "Signed in"}
-          </span>
+        <div className="flex items-center gap-3 text-xs text-zinc-300">
+          <span>{signedInAs}</span>
           <button
             onClick={onSignOut}
-            className="rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            className="rounded-md border border-zinc-600 px-3 py-1 hover:bg-zinc-800"
           >
             Sign out
           </button>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column: subsidiaries + departments tree */}
-        <div className="lg:col-span-2 space-y-6">
-          {subsidiaries.map((sub) => (
-            <section
-              key={sub.id}
-              className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-5"
+      {/* Selected department panel */}
+      {selectedDepartment && (
+        <aside className="absolute top-24 right-4 z-10 w-72 rounded-lg border border-zinc-700 bg-zinc-900/90 backdrop-blur p-4 text-zinc-100">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-medium">{selectedDepartment.name}</h3>
+            <button
+              onClick={() => setSelectedDepartmentId(null)}
+              className="text-zinc-500 hover:text-zinc-200 text-xs"
             >
-              <h2 className="text-lg font-medium mb-1">{sub.name}</h2>
-              <p className="text-sm text-zinc-500 mb-4">{sub.description}</p>
-
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {sub.departments.map((d) => {
-                  const selected = selectedDept?.id === d.id;
-                  return (
-                    <li key={d.id}>
-                      <button
-                        onClick={() => onSelectDepartment(d)}
-                        className={`w-full text-left rounded-md border px-3 py-2 text-sm transition-colors ${
-                          selected
-                            ? "border-zinc-900 dark:border-zinc-100 bg-zinc-100 dark:bg-zinc-900"
-                            : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-400"
-                        }`}
-                      >
-                        <div className="font-medium">{d.name}</div>
-                        <div className="text-xs text-zinc-500">
-                          {d.description}
-                        </div>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ))}
-        </div>
-
-        {/* Right column: selected department's employees */}
-        <aside className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-5 h-fit">
-          {selectedDept ? (
-            <>
-              <h3 className="font-medium mb-1">{selectedDept.name}</h3>
-              <p className="text-xs text-zinc-500 mb-4">
-                {employees.length} employee{employees.length === 1 ? "" : "s"}
-              </p>
-              <ul className="space-y-2">
-                {employees.map((e) => (
-                  <li
-                    key={e.id}
-                    className="flex items-center justify-between gap-3 text-sm"
-                  >
-                    <div>
-                      <div className="font-medium">{e.name}</div>
-                      <div className="text-xs text-zinc-500">{e.title}</div>
-                    </div>
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        e.isOnline
-                          ? "bg-emerald-500"
-                          : "bg-zinc-300 dark:bg-zinc-700"
-                      }`}
-                      title={e.isOnline ? "online" : "offline"}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : (
-            <p className="text-sm text-zinc-500">
-              Click a department to see its employees.
-            </p>
-          )}
+              close
+            </button>
+          </div>
+          <p className="text-xs text-zinc-400 mb-3">
+            {selectedDepartment.description}
+          </p>
+          <ul className="space-y-1.5">
+            {selectedEmployees.map((e) => (
+              <li
+                key={e.id}
+                className={`flex items-center justify-between gap-2 text-sm rounded-md px-2 py-1 cursor-pointer ${
+                  selectedEmployee?.id === e.id
+                    ? "bg-zinc-700"
+                    : "hover:bg-zinc-800"
+                }`}
+                onClick={() => setSelectedEmployee(e)}
+              >
+                <div>
+                  <div className="text-sm">{e.name}</div>
+                  <div className="text-xs text-zinc-500">{e.title}</div>
+                </div>
+                <span
+                  className={`h-2 w-2 rounded-full shrink-0 ${
+                    e.isOnline ? "bg-emerald-400" : "bg-zinc-500"
+                  }`}
+                  title={e.isOnline ? "online" : "offline"}
+                />
+              </li>
+            ))}
+          </ul>
         </aside>
-      </div>
+      )}
 
-      <footer className="mt-12 text-center text-xs text-zinc-400">
-        Akhlaq Ventures 3D Company Dashboard
-      </footer>
+      {/* Selected employee panel */}
+      {selectedEmployee && (
+        <aside className="absolute bottom-4 right-4 z-10 w-72 rounded-lg border border-zinc-700 bg-zinc-900/90 backdrop-blur p-4 text-zinc-100">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-medium">{selectedEmployee.name}</h3>
+            <button
+              onClick={() => setSelectedEmployee(null)}
+              className="text-zinc-500 hover:text-zinc-200 text-xs"
+            >
+              close
+            </button>
+          </div>
+          <p className="text-sm text-zinc-300">{selectedEmployee.title}</p>
+          <p className="text-xs text-zinc-500">{selectedEmployee.email}</p>
+          <p className="text-xs text-zinc-500 mt-1">
+            {selectedEmployee.department} ·{" "}
+            <span
+              className={
+                selectedEmployee.isOnline ? "text-emerald-400" : "text-zinc-500"
+              }
+            >
+              {selectedEmployee.isOnline ? "online" : "offline"}
+            </span>
+          </p>
+        </aside>
+      )}
+
+      {/* Hint overlay (bottom-left) */}
+      <div className="absolute bottom-4 left-4 z-10 text-xs text-zinc-500">
+        Drag to rotate · scroll to zoom · click a department or employee
+      </div>
     </main>
   );
 }
